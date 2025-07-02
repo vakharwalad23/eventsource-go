@@ -3,8 +3,12 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 
+	"github.com/gorilla/mux"
+	"github.com/vakharwalad23/eventsource-starter-go/internal/api"
+	"github.com/vakharwalad23/eventsource-starter-go/internal/app"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/minio"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/redis"
 )
@@ -25,6 +29,18 @@ func main() {
 
 	// Redis Client
 	redisClient := redis.NewRedisClient(os.Getenv("REDIS_ADDR"))
+
+	// App Service
+	svc := app.NewAccountService(minioClient, redisClient)
+
+	// HTTP Handlers
+	r := mux.NewRouter()
+	api.RgisterHandlers(r, svc)
+
+	log.Println("Server started on :8080")
+	if err := http.ListenAndServe(":8080", r); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 
 	defer minioClient.Close(ctx)
 	defer redisClient.Close()
