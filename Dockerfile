@@ -9,6 +9,7 @@ COPY . .
 
 RUN go build -o main ./cmd/api
 RUN go build -o consumer ./cmd/consumer
+RUN go build -o projection ./cmd/projections
 
 EXPOSE 8080
 

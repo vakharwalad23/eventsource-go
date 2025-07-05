@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gorilla/mux"
+	_ "github.com/lib/pq"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/api"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/app"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/kafka"
@@ -35,8 +37,14 @@ func main() {
 	// Redis Client
 	redisClient := redis.NewRedisClient(os.Getenv("REDIS_ADDR"))
 
+	// ReadDB
+	db, err := sql.Open("postgres", os.Getenv("POSTGRES_DSN"))
+	if err != nil {
+		log.Fatalf("Failed to connect to Postgres: %v", err)
+	}
+
 	// App Service
-	svc := app.NewAccountService(minioClient, redisClient, kafkaProducer)
+	svc := app.NewAccountService(minioClient, redisClient, kafkaProducer, db)
 
 	// HTTP Handlers
 	r := mux.NewRouter()

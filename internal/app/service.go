@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -12,16 +13,18 @@ import (
 )
 
 type AccountService struct {
-	minio *minio.MinioClient
-	redis *redis.RedisClient
-	kafka *kafka.Producer
+	minio  *minio.MinioClient
+	redis  *redis.RedisClient
+	kafka  *kafka.Producer
+	readDB *sql.DB
 }
 
-func NewAccountService(minioClient *minio.MinioClient, redisClient *redis.RedisClient, kafkaProducer *kafka.Producer) *AccountService {
+func NewAccountService(minioClient *minio.MinioClient, redisClient *redis.RedisClient, kafkaProducer *kafka.Producer, readDB *sql.DB) *AccountService {
 	return &AccountService{
-		minio: minioClient,
-		kafka: kafkaProducer,
-		redis: redisClient,
+		minio:  minioClient,
+		kafka:  kafkaProducer,
+		redis:  redisClient,
+		readDB: readDB,
 	}
 }
 
@@ -74,26 +77,15 @@ func (s *AccountService) GetAccount(ctx context.Context, accountId string) (*dom
 		return acc, nil
 	}
 
-	// If not found in Redis, fetch from MinIO
-	events, err := s.minio.GetEvents(ctx, accountId)
-	if err != nil {
+	// If not found in Redis, read from readDB
+	row := s.readDB.QueryRowContext(ctx, "SELECT id, balance FROM accounts WHERE id = $1", accountId)
+	var account domain.Account
+	if err := row.Scan(&account.ID, &account.Balance); err != nil {
 		return nil, err
 	}
 
-	acc = &domain.Account{ID: accountId, Balance: 0}
-	for _, e := range events {
-		switch e.Type {
-		case domain.AccountCreated:
-			acc.Balance = 0
-		case domain.MoneyDeposited:
-			acc.Balance += e.Amount
-		case domain.MoneyWithdrawn:
-			acc.Balance -= e.Amount
-		}
-	}
-
 	// hydrate Redis cache
-	_ = s.redis.SetAccount(ctx, acc)
+	_ = s.redis.SetAccount(ctx, &account)
 
-	return acc, nil
+	return &account, nil
 }
