@@ -9,11 +9,13 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/api"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/app"
+	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/kafka"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/minio"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/redis"
 )
 
 func main() {
+
 	ctx := context.Background()
 
 	// MiniO Client
@@ -27,11 +29,14 @@ func main() {
 		log.Fatalf("Failed to connect to MinIO: %v", err)
 	}
 
+	// Kafka Producer
+	kafkaProducer := kafka.NewProducer([]string{os.Getenv("KAFKA_BROKER")}, os.Getenv("KAFKA_TOPIC"))
+
 	// Redis Client
 	redisClient := redis.NewRedisClient(os.Getenv("REDIS_ADDR"))
 
 	// App Service
-	svc := app.NewAccountService(minioClient, redisClient)
+	svc := app.NewAccountService(minioClient, redisClient, kafkaProducer)
 
 	// HTTP Handlers
 	r := mux.NewRouter()
@@ -42,7 +47,9 @@ func main() {
 		log.Fatalf("Server failed: %v", err)
 	}
 
+	// Cleanup resources
 	defer minioClient.Close(ctx)
 	defer redisClient.Close()
+	defer kafkaProducer.Close()
 
 }

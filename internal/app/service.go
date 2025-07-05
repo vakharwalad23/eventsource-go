@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vakharwalad23/eventsource-starter-go/internal/domain"
+	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/kafka"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/minio"
 	"github.com/vakharwalad23/eventsource-starter-go/internal/infrastructure/redis"
 )
@@ -13,11 +14,13 @@ import (
 type AccountService struct {
 	minio *minio.MinioClient
 	redis *redis.RedisClient
+	kafka *kafka.Producer
 }
 
-func NewAccountService(minioClient *minio.MinioClient, redisClient *redis.RedisClient) *AccountService {
+func NewAccountService(minioClient *minio.MinioClient, redisClient *redis.RedisClient, kafkaProducer *kafka.Producer) *AccountService {
 	return &AccountService{
 		minio: minioClient,
+		kafka: kafkaProducer,
 		redis: redisClient,
 	}
 }
@@ -28,7 +31,7 @@ func (s *AccountService) CreateAccount(ctx context.Context, accountId string) er
 		AccountID: accountId,
 		Time:      time.Now(),
 	}
-	return s.minio.AppendEvent(ctx, event)
+	return s.kafka.PublishEvents(ctx, event)
 }
 
 func (s *AccountService) Deposit(ctx context.Context, accountId string, amount float64) error {
@@ -38,7 +41,7 @@ func (s *AccountService) Deposit(ctx context.Context, accountId string, amount f
 		Amount:    amount,
 		Time:      time.Now(),
 	}
-	if err := s.minio.AppendEvent(ctx, event); err != nil {
+	if err := s.kafka.PublishEvents(ctx, event); err != nil {
 		return err
 	}
 	return s.redis.DeleteAccount(ctx, accountId)
@@ -58,7 +61,7 @@ func (s *AccountService) Withdraw(ctx context.Context, accountId string, amount 
 		Amount:    amount,
 		Time:      time.Now(),
 	}
-	if err = s.minio.AppendEvent(ctx, event); err != nil {
+	if err = s.kafka.PublishEvents(ctx, event); err != nil {
 		return err
 	}
 	return s.redis.DeleteAccount(ctx, accountId)

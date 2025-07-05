@@ -20,6 +20,25 @@ services:
     ports:
       - "6379:6379"
 
+  kafka:
+    image: apache/kafka:latest
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    # using Kraft mode (Kafka Raft)
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
   app:
     build:
       context: .
@@ -30,11 +49,30 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       REDIS_ADDR: redis:6379
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: account-events
     ports:
       - "8080:8080"
     depends_on:
       - minio
       - redis
+      - kafka
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eventsource-consumer
+    command: ["./consumer"]
+    environment:
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: account-events
+    depends_on:
+      - minio
+      - kafka
 
 volumes:
   minio_data:
